@@ -14,15 +14,14 @@ internal static class Program
     static IntPtr _memDc, _memBmp, _memOld;
     static int _bufW, _bufH;
 
-    static IntPtr _fClock, _fMain, _fBtn, _fLap;
     static readonly RECT[] _btn = new RECT[4];
     static RECT _rcClock, _rcMain, _rcLaps;
-    static int _lapRowH;
+    static int _mainScale, _clockScale, _lapScale, _btnScale, _lapRowH;
 
     // palette, 0xRRGGBB
-    const uint Bg = 0x14161A, Surface = 0x1B1E24, Border = 0x2C313B,
-        Ink = 0xEEF1F5, Dim = 0x8892A0, Split = 0xC2CBD6,
-        Accent = 0x58B6FF, OnAccent = 0x0A1017;
+    const uint Bg = 0x0E1014, Surface = 0x171A20, Border = 0x2A2F38,
+        Ink = 0xF2F3F5, Dim = 0x7C8494, Split = 0xB8C0CC,
+        Accent = 0x6FE0A5, OnAccent = 0x07130C;
 
     // ---- win32 constants --------------------------------------------------
     const uint WS_OVERLAPPEDWINDOW = 0x00CF0000;
@@ -30,9 +29,6 @@ internal static class Program
     const int WM_CREATE = 0x0001, WM_DESTROY = 0x0002, WM_SIZE = 0x0005,
         WM_PAINT = 0x000F, WM_TIMER = 0x0113, WM_ERASEBKGND = 0x0014,
         WM_KEYDOWN = 0x0100, WM_LBUTTONDOWN = 0x0201, WM_GETMINMAXINFO = 0x0024;
-    const uint DT_CENTER = 1, DT_RIGHT = 2, DT_VCENTER = 4,
-        DT_SINGLELINE = 0x20, DT_NOPREFIX = 0x800;
-    const int PS_SOLID = 0, FW_SEMIBOLD = 600, DEFAULT_CHARSET = 1, CLEARTYPE_QUALITY = 5;
     const uint SRCCOPY = 0x00CC0020;
     const int SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010;
     static readonly IntPtr HWND_TOPMOST = new IntPtr(-1), HWND_NOTOPMOST = new IntPtr(-2);
@@ -56,11 +52,11 @@ internal static class Program
         wc.hIcon = LoadIcon(IntPtr.Zero, new IntPtr(32512));
         wc.hIconSm = wc.hIcon;
         wc.hCursor = LoadCursor(IntPtr.Zero, new IntPtr(32512));
-        wc.lpszClassName = "MinStopwatch";
+        wc.lpszClassName = "PixelStopwatch";
         RegisterClassEx(ref wc);
 
         int cw = 420 * _dpi / 96, ch = 500 * _dpi / 96;
-        _hwnd = CreateWindowEx(0, "MinStopwatch", "Stopwatch", WS_OVERLAPPEDWINDOW,
+        _hwnd = CreateWindowEx(0, "PixelStopwatch", "Stopwatch", WS_OVERLAPPEDWINDOW,
             unchecked((int)0x80000000), unchecked((int)0x80000000), cw, ch,
             IntPtr.Zero, IntPtr.Zero, inst, IntPtr.Zero);
         DarkTitleBar(_hwnd);
@@ -94,8 +90,8 @@ internal static class Program
 
             case WM_GETMINMAXINFO:
                 MINMAXINFO mm = (MINMAXINFO)Marshal.PtrToStructure(lp, typeof(MINMAXINFO));
-                mm.ptMinTrackSize.x = 280 * _dpi / 96;
-                mm.ptMinTrackSize.y = 260 * _dpi / 96;
+                mm.ptMinTrackSize.x = 360 * _dpi / 96;
+                mm.ptMinTrackSize.y = 280 * _dpi / 96;
                 Marshal.StructureToPtr(mm, lp, false);
                 return IntPtr.Zero;
 
@@ -120,7 +116,6 @@ internal static class Program
 
             case WM_DESTROY:
                 ReleaseBuffer();
-                DeleteFonts();
                 PostQuitMessage(0);
                 return IntPtr.Zero;
         }
@@ -224,29 +219,28 @@ internal static class Program
     // ---- layout -----------------------------------------------------------
     static void Layout()
     {
-        ReleaseBuffer(); // release fonts selected into the back buffer before deleting them
+        ReleaseBuffer();
         RECT rc;
         GetClientRect(_hwnd, out rc);
         int w = Math.Max(1, rc.right), h = Math.Max(1, rc.bottom);
+        int pad = Clamp(h / 28, 8, 28);
+        int innerW = Math.Max(1, w - 2 * pad);
 
-        int pad = Clamp(h / 26, 8, 30);
-        int clockH = Clamp(h * 7 / 100, 12, 32);
-        int btnH = Clamp(h * 13 / 100, 26, 64);
-        int gap = Clamp(w / 70, 5, 14);
+        // 5x7 glyphs, 1px gap: 10 glyphs = 59 units, 7 units tall
+        _mainScale = Math.Max(2, Math.Min(innerW / 59, h * 38 / 100 / 7));
+        _clockScale = Clamp(_mainScale / 2, 1, 4);
+        _lapScale = Clamp(Math.Min(_mainScale * 2 / 5, (innerW * 40 / 100 - 8) / 53), 1, 4);
 
-        _rcClock = new RECT { left = pad, top = pad, right = w - pad, bottom = pad + clockH };
+        _rcClock = new RECT { left = pad, top = pad, right = w - pad, bottom = pad + 7 * _clockScale };
         int top = _rcClock.bottom + pad / 2;
+        _rcMain = new RECT { left = pad, top = top, right = w - pad, bottom = top + 7 * _mainScale };
+
+        int btnH = Clamp(h * 10 / 100, 30, 56);
         int btnTop = h - pad - btnH;
-        int bottom = btnTop - pad / 2;
-        int avail = Math.Max(24, bottom - top);
+        int gap = Clamp(w / 80, 6, 12);
+        int bw = Math.Max(20, (innerW - 3 * gap) / 4);
+        _btnScale = Clamp(Math.Min((bw - 12) / 29, (btnH - 12) / 7), 1, 4);
 
-        int mainH = Math.Max(14, Math.Min((w - 2 * pad) * 18 / 100, avail * 62 / 100));
-        int block = mainH * 13 / 10;
-        _rcMain = new RECT { left = pad, top = top, right = w - pad, bottom = top + block };
-        _rcLaps = new RECT { left = pad, top = _rcMain.bottom + pad / 3, right = w - pad, bottom = bottom };
-
-        int inner = w - 2 * pad;
-        int bw = Math.Max(24, (inner - 3 * gap) / 4);
         for (int i = 0; i < 4; i++)
             _btn[i] = new RECT
             {
@@ -256,28 +250,8 @@ internal static class Program
                 bottom = btnTop + btnH
             };
 
-        int lapH = Clamp(mainH * 17 / 100, 11, 18);
-        _lapRowH = lapH * 2;
-        DeleteFonts();
-        _fMain = MakeFont(mainH, 400, "Consolas");
-        _fClock = MakeFont(Clamp(mainH * 24 / 100, 12, 30), 400, "Consolas");
-        _fBtn = MakeFont(Clamp(Math.Min(btnH * 42 / 100, bw * 26 / 100), 11, 20), FW_SEMIBOLD, "Segoe UI");
-        _fLap = MakeFont(lapH, 400, "Consolas");
-    }
-
-    static IntPtr MakeFont(int px, int weight, string face)
-    {
-        return CreateFontW(-px, 0, 0, 0, weight, 0, 0, 0,
-            DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, face);
-    }
-
-    static void DeleteFonts()
-    {
-        if (_fMain != IntPtr.Zero) DeleteObject(_fMain);
-        if (_fClock != IntPtr.Zero) DeleteObject(_fClock);
-        if (_fBtn != IntPtr.Zero) DeleteObject(_fBtn);
-        if (_fLap != IntPtr.Zero) DeleteObject(_fLap);
-        _fMain = _fClock = _fBtn = _fLap = IntPtr.Zero;
+        _rcLaps = new RECT { left = pad, top = _rcMain.bottom + pad, right = w - pad, bottom = btnTop - pad };
+        _lapRowH = 7 * _lapScale + Clamp(_lapScale * 3, 6, 14);
     }
 
     // ---- painting ---------------------------------------------------------
@@ -292,14 +266,13 @@ internal static class Program
         bool fresh = _memDc == IntPtr.Zero || _bufW != w || _bufH != h;
         EnsureBuffer(dc, w, h);
         RECT u = ps.rcPaint;
-        bool partial = !fresh && _fMain != IntPtr.Zero
+        bool partial = !fresh
             && u.left >= _rcMain.left && u.top >= _rcMain.top
             && u.right <= _rcMain.right && u.bottom <= _rcMain.bottom;
 
         if (partial)
         {
             Fill(_memDc, u, Bg);
-            SetBkMode(_memDc, 1);
             DrawTime(_memDc);
             BitBlt(dc, u.left, u.top, u.right - u.left, u.bottom - u.top,
                 _memDc, u.left, u.top, SRCCOPY);
@@ -307,7 +280,7 @@ internal static class Program
         else
         {
             Fill(_memDc, new RECT { right = w, bottom = h }, Bg);
-            if (_fMain != IntPtr.Zero) DrawUi(_memDc);
+            DrawUi(_memDc);
             BitBlt(dc, 0, 0, w, h, _memDc, 0, 0, SRCCOPY);
         }
         EndPaint(hwnd, ref ps);
@@ -336,7 +309,6 @@ internal static class Program
 
     static void DrawUi(IntPtr dc)
     {
-        SetBkMode(dc, 1);
         DrawClock(dc);
         DrawTime(dc);
         DrawButtons(dc);
@@ -347,32 +319,23 @@ internal static class Program
     {
         SYSTEMTIME st;
         GetLocalTime(out st);
-        RECT r = _rcClock;
-        Text(dc, string.Format("{0:00}:{1:00}:{2:00}", st.wHour, st.wMinute, st.wSecond),
-            _fClock, Dim, DT_CENTER | DT_VCENTER | DT_SINGLELINE, ref r);
+        PixelCenter(dc, string.Format("{0:00}:{1:00}:{2:00}", st.wHour, st.wMinute, st.wSecond),
+            _rcClock, _clockScale, Dim);
     }
 
     static void DrawTime(IntPtr dc)
     {
-        RECT r = _rcMain;
-        Text(dc, Fmt(ElapsedMs()), _fMain, _running ? Ink : Dim,
-            DT_CENTER | DT_VCENTER | DT_SINGLELINE, ref r);
+        PixelCenter(dc, Fmt(ElapsedMs()), _rcMain, _mainScale, _running ? Ink : Dim);
     }
 
     static void DrawButtons(IntPtr dc)
     {
-        RECT r;
         for (int i = 0; i < 4; i++)
         {
-            bool primary = i == 0;
-            bool active = i == 3 && _topmost;
-            bool filled = primary || active;
-            int bh = _btn[i].bottom - _btn[i].top;
-            RoundedBox(dc, _btn[i], filled ? Accent : Surface, filled ? Accent : Border,
-                Clamp(bh * 35 / 100, 8, 20));
-            r = _btn[i];
-            Text(dc, Label(i), _fBtn, filled ? OnAccent : Ink,
-                DT_CENTER | DT_VCENTER | DT_SINGLELINE, ref r);
+            bool filled = i == 0 || (i == 3 && _topmost);
+            if (filled) Fill(dc, _btn[i], Accent);
+            else Box(dc, _btn[i], Surface, Border);
+            PixelCenter(dc, Label(i), _btn[i], _btnScale, filled ? OnAccent : Ink);
         }
     }
 
@@ -381,61 +344,159 @@ internal static class Program
         if (i == 0) return _running ? "PAUSE" : "START";
         if (i == 1) return "RESET";
         if (i == 2) return "LAP";
-        return "ON TOP";
+        return "PIN";
     }
 
     static void DrawLaps(IntPtr dc)
     {
-        if (_lapCount == 0 || _lapRowH <= 0) return;
+        if (_lapCount == 0) return;
         int left = _rcLaps.left, right = _rcLaps.right;
-        int c1 = left + (right - left) * 24 / 100;
-        int c2 = left + (right - left) * 62 / 100;
+        if (right <= left) return;
+        int c1 = left + (right - left) * 20 / 100;
+        int c2 = left + (right - left) * 60 / 100;
 
         int y = _rcLaps.top;
-        RECT a = new RECT { left = left, top = y, right = c1, bottom = y + _lapRowH };
-        RECT b = new RECT { left = c1, top = y, right = c2, bottom = y + _lapRowH };
-        RECT c = new RECT { left = c2, top = y, right = right, bottom = y + _lapRowH };
-        Text(dc, "LAP", _fLap, Dim, DT_VCENTER | DT_SINGLELINE, ref a);
-        Text(dc, "SPLIT", _fLap, Dim, DT_RIGHT | DT_VCENTER | DT_SINGLELINE, ref b);
-        Text(dc, "TOTAL", _fLap, Dim, DT_RIGHT | DT_VCENTER | DT_SINGLELINE, ref c);
+        int rows = (_rcLaps.bottom - y) / _lapRowH;
+        if (rows < 2) return;
+
+        PixelText(dc, "LAP", left, y + RowTextOffset(), _lapScale, Dim);
+        PixelText(dc, "SPLIT", c2 - TextWidth("SPLIT", _lapScale), y + RowTextOffset(), _lapScale, Dim);
+        PixelText(dc, "TOTAL", right - TextWidth("TOTAL", _lapScale), y + RowTextOffset(), _lapScale, Dim);
         y += _lapRowH;
 
-        int rows = (_rcLaps.bottom - y) / _lapRowH;
-        for (int k = 0; k < rows && k < _lapCount; k++)
+        for (int k = 0; k < rows - 1 && k < _lapCount; k++)
         {
             int i = _lapCount - 1 - k;
             long total = _laps[i];
             long split = total - (i > 0 ? _laps[i - 1] : 0);
 
-            a = new RECT { left = left, top = y, right = c1, bottom = y + _lapRowH };
-            b = new RECT { left = c1, top = y, right = c2, bottom = y + _lapRowH };
-            c = new RECT { left = c2, top = y, right = right, bottom = y + _lapRowH };
-            Text(dc, (i + 1).ToString("00"), _fLap, Dim, DT_VCENTER | DT_SINGLELINE, ref a);
-            Text(dc, Fmt(split), _fLap, Split, DT_RIGHT | DT_VCENTER | DT_SINGLELINE, ref b);
-            Text(dc, Fmt(total), _fLap, Ink, DT_RIGHT | DT_VCENTER | DT_SINGLELINE, ref c);
+            PixelText(dc, (i + 1).ToString("00"), left, y + RowTextOffset(), _lapScale, Dim);
+            PixelText(dc, Fmt(split), c2 - TextWidth(Fmt(split), _lapScale),
+                y + RowTextOffset(), _lapScale, Split);
+            PixelText(dc, Fmt(total), right - TextWidth(Fmt(total), _lapScale),
+                y + RowTextOffset(), _lapScale, Ink);
             y += _lapRowH;
         }
     }
 
-    // ---- gdi helpers ------------------------------------------------------
-    static void Text(IntPtr dc, string s, IntPtr font, uint rgb, uint fmt, ref RECT r)
+    static int RowTextOffset()
     {
-        SelectObject(dc, font);
-        SetTextColor(dc, Cr(rgb));
-        DrawTextW(dc, s, -1, ref r, fmt | DT_NOPREFIX);
+        return (_lapRowH - 7 * _lapScale) / 2;
     }
 
-    static void RoundedBox(IntPtr dc, RECT r, uint fill, uint edge, int radius)
+    // ---- pixel font -------------------------------------------------------
+    // 5x7 glyphs, rows top to bottom, indexed by Glyph()
+    static readonly string[] _glyphs =
     {
-        IntPtr br = CreateSolidBrush(Cr(fill));
-        IntPtr pn = CreatePen(PS_SOLID, 1, Cr(edge));
-        IntPtr ob = SelectObject(dc, br);
-        IntPtr op = SelectObject(dc, pn);
-        RoundRect(dc, r.left, r.top, r.right, r.bottom, radius, radius);
-        SelectObject(dc, ob);
-        SelectObject(dc, op);
+        /*A*/ "01110"+"10001"+"10001"+"11111"+"10001"+"10001"+"10001",
+        /*B*/ "11110"+"10001"+"10001"+"11110"+"10001"+"10001"+"11110",
+        /*C*/ "01110"+"10001"+"10000"+"10000"+"10000"+"10001"+"01110",
+        /*D*/ "11110"+"10001"+"10001"+"10001"+"10001"+"10001"+"11110",
+        /*E*/ "11111"+"10000"+"10000"+"11110"+"10000"+"10000"+"11111",
+        /*F*/ "11111"+"10000"+"10000"+"11110"+"10000"+"10000"+"10000",
+        /*G*/ "01110"+"10001"+"10000"+"10111"+"10001"+"10001"+"01111",
+        /*H*/ "10001"+"10001"+"10001"+"11111"+"10001"+"10001"+"10001",
+        /*I*/ "01110"+"00100"+"00100"+"00100"+"00100"+"00100"+"01110",
+        /*J*/ "00111"+"00010"+"00010"+"00010"+"00010"+"10010"+"01100",
+        /*K*/ "10001"+"10010"+"10100"+"11000"+"10100"+"10010"+"10001",
+        /*L*/ "10000"+"10000"+"10000"+"10000"+"10000"+"10000"+"11111",
+        /*M*/ "10001"+"11011"+"10101"+"10101"+"10001"+"10001"+"10001",
+        /*N*/ "10001"+"11001"+"10101"+"10011"+"10001"+"10001"+"10001",
+        /*O*/ "01110"+"10001"+"10001"+"10001"+"10001"+"10001"+"01110",
+        /*P*/ "11110"+"10001"+"10001"+"11110"+"10000"+"10000"+"10000",
+        /*Q*/ "01110"+"10001"+"10001"+"10001"+"10101"+"10010"+"01101",
+        /*R*/ "11110"+"10001"+"10001"+"11110"+"10100"+"10010"+"10001",
+        /*S*/ "01111"+"10000"+"10000"+"01110"+"00001"+"00001"+"11110",
+        /*T*/ "11111"+"00100"+"00100"+"00100"+"00100"+"00100"+"00100",
+        /*U*/ "10001"+"10001"+"10001"+"10001"+"10001"+"10001"+"01110",
+        /*V*/ "10001"+"10001"+"10001"+"10001"+"10001"+"01010"+"00100",
+        /*W*/ "10001"+"10001"+"10001"+"10101"+"10101"+"11011"+"10001",
+        /*X*/ "10001"+"10001"+"01010"+"00100"+"01010"+"10001"+"10001",
+        /*Y*/ "10001"+"10001"+"01010"+"00100"+"00100"+"00100"+"00100",
+        /*Z*/ "11111"+"00001"+"00010"+"00100"+"01000"+"10000"+"11111",
+        /*0*/ "01110"+"10001"+"10011"+"10101"+"11001"+"10001"+"01110",
+        /*1*/ "00100"+"01100"+"00100"+"00100"+"00100"+"00100"+"01110",
+        /*2*/ "01110"+"10001"+"00001"+"00010"+"00100"+"01000"+"11111",
+        /*3*/ "11111"+"00010"+"00100"+"00010"+"00001"+"10001"+"01110",
+        /*4*/ "00010"+"00110"+"01010"+"10010"+"11111"+"00010"+"00010",
+        /*5*/ "11111"+"10000"+"11110"+"00001"+"00001"+"10001"+"01110",
+        /*6*/ "00110"+"01000"+"10000"+"11110"+"10001"+"10001"+"01110",
+        /*7*/ "11111"+"00001"+"00010"+"00100"+"01000"+"01000"+"01000",
+        /*8*/ "01110"+"10001"+"10001"+"01110"+"10001"+"10001"+"01110",
+        /*9*/ "01110"+"10001"+"10001"+"01111"+"00001"+"00010"+"01100",
+        /*:*/ "00000"+"00110"+"00110"+"00000"+"00110"+"00110"+"00000",
+        /*.*/ "00000"+"00000"+"00000"+"00000"+"00000"+"00110"+"00110",
+        /*-*/ "00000"+"00000"+"00000"+"11111"+"00000"+"00000"+"00000",
+        /* */ "00000"+"00000"+"00000"+"00000"+"00000"+"00000"+"00000",
+    };
+
+    static int Glyph(char c)
+    {
+        if (c >= 'A' && c <= 'Z') return c - 'A';
+        if (c >= '0' && c <= '9') return 26 + c - '0';
+        if (c == ':') return 36;
+        if (c == '.') return 37;
+        if (c == '-') return 38;
+        return 39; // space, and anything unexpected
+    }
+
+    static int TextWidth(string s, int scale)
+    {
+        return s.Length * 6 * scale - scale;
+    }
+
+    static void PixelText(IntPtr dc, string s, int x, int y, int scale, uint rgb)
+    {
+        IntPtr br = CreateSolidBrush(Cr(rgb));
+        int adv = 6 * scale;
+        for (int i = 0; i < s.Length; i++)
+        {
+            string g = _glyphs[Glyph(s[i])];
+            for (int row = 0; row < 7; row++)
+            {
+                int run = -1;
+                for (int col = 0; col <= 5; col++)
+                {
+                    bool on = col < 5 && g[row * 5 + col] == '1';
+                    if (on && run < 0) run = col;
+                    else if (!on && run >= 0)
+                    {
+                        RECT r = new RECT
+                        {
+                            left = x + run * scale,
+                            top = y + row * scale,
+                            right = x + col * scale,
+                            bottom = y + (row + 1) * scale
+                        };
+                        FillRect(dc, ref r, br);
+                        run = -1;
+                    }
+                }
+            }
+            x += adv;
+        }
         DeleteObject(br);
-        DeleteObject(pn);
+    }
+
+    static void PixelCenter(IntPtr dc, string s, RECT r, int scale, uint rgb)
+    {
+        PixelText(dc, s,
+            r.left + (r.right - r.left - TextWidth(s, scale)) / 2,
+            r.top + (r.bottom - r.top - 7 * scale) / 2,
+            scale, rgb);
+    }
+
+    // ---- gdi helpers ------------------------------------------------------
+    static void Box(IntPtr dc, RECT r, uint fill, uint edge)
+    {
+        Fill(dc, r, edge);
+        Fill(dc, new RECT
+        {
+            left = r.left + 2,
+            top = r.top + 2,
+            right = r.right - 2,
+            bottom = r.bottom - 2
+        }, fill);
     }
 
     static void Fill(IntPtr dc, RECT r, uint rgb)
@@ -525,6 +586,7 @@ internal static class Program
     [DllImport("kernel32.dll")] static extern IntPtr GetModuleHandle(string name);
     [DllImport("kernel32.dll")] static extern void QueryPerformanceCounter(out long t);
     [DllImport("kernel32.dll")] static extern void QueryPerformanceFrequency(out long f);
+    [DllImport("kernel32.dll")] static extern void GetLocalTime(out SYSTEMTIME st);
 
     [DllImport("user32.dll")] static extern void SetProcessDPIAware();
     [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr h);
@@ -552,13 +614,11 @@ internal static class Program
     [DllImport("user32.dll")] static extern bool GetClientRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] static extern IntPtr BeginPaint(IntPtr h, out PAINTSTRUCT ps);
     [DllImport("user32.dll")] static extern bool EndPaint(IntPtr h, ref PAINTSTRUCT ps);
-    [DllImport("kernel32.dll")] static extern void GetLocalTime(out SYSTEMTIME st);
     [DllImport("user32.dll")] static extern IntPtr LoadIcon(IntPtr inst, IntPtr name);
     [DllImport("user32.dll")] static extern IntPtr LoadCursor(IntPtr inst, IntPtr name);
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after,
         int x, int y, int cx, int cy, int flags);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    static extern int DrawTextW(IntPtr dc, string s, int len, ref RECT r, uint fmt);
+    [DllImport("user32.dll")] static extern int FillRect(IntPtr dc, ref RECT r, IntPtr brush);
 
     [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr dc);
     [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleBitmap(IntPtr dc, int w, int h);
@@ -567,16 +627,7 @@ internal static class Program
     [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr obj);
     [DllImport("gdi32.dll")] static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h,
         IntPtr src, int sx, int sy, uint rop);
-    [DllImport("gdi32.dll")] static extern int SetBkMode(IntPtr dc, int mode);
-    [DllImport("gdi32.dll")] static extern uint SetTextColor(IntPtr dc, uint cr);
     [DllImport("gdi32.dll")] static extern IntPtr CreateSolidBrush(uint cr);
-    [DllImport("gdi32.dll")] static extern IntPtr CreatePen(int style, int width, uint cr);
-    [DllImport("gdi32.dll")] static extern bool RoundRect(IntPtr dc, int l, int t, int r, int b, int ew, int eh);
-    [DllImport("user32.dll")] static extern int FillRect(IntPtr dc, ref RECT r, IntPtr brush);
-    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
-    static extern IntPtr CreateFontW(int h, int w, int esc, int orient, int weight,
-        uint italic, uint underline, uint strike, uint charset, uint outPrec, uint clipPrec,
-        uint quality, uint pitch, string face);
 
     [DllImport("dwmapi.dll")]
     static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int value, int size);
