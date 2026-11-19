@@ -232,14 +232,18 @@ internal static class Program
         _lapScale = Clamp(Math.Min(_mainScale * 2 / 5, (innerW * 40 / 100 - 8) / 53), 1, 4);
 
         _rcClock = new RECT { left = pad, top = pad, right = w - pad, bottom = pad + 7 * _clockScale };
-        int top = _rcClock.bottom + pad;
-        _rcMain = new RECT { left = pad, top = top, right = w - pad, bottom = top + 7 * _mainScale };
 
         int btnH = Clamp(h * 10 / 100, 30, 56);
         int btnTop = h - pad - btnH;
         int gap = Clamp(w / 80, 6, 12);
         int bw = Math.Max(20, (innerW - 3 * gap) / 4);
         _btnScale = Clamp(Math.Min((bw - 12) / 29, (btnH - 12) / 7), 1, 4);
+
+        // centre the stopwatch between the clock and the buttons
+        int regionTop = _rcClock.bottom + pad;
+        int regionBottom = btnTop - pad;
+        int mainTop = regionTop + Math.Max(0, (regionBottom - regionTop - 7 * _mainScale) / 2);
+        _rcMain = new RECT { left = pad, top = mainTop, right = w - pad, bottom = mainTop + 7 * _mainScale };
 
         for (int i = 0; i < 4; i++)
             _btn[i] = new RECT
@@ -250,7 +254,7 @@ internal static class Program
                 bottom = btnTop + btnH
             };
 
-        _rcLaps = new RECT { left = pad, top = _rcMain.bottom + pad, right = w - pad, bottom = btnTop - pad };
+        _rcLaps = new RECT { left = pad, top = _rcMain.bottom + pad, right = w - pad, bottom = regionBottom };
         _lapRowH = 7 * _lapScale + Clamp(_lapScale * 3, 6, 14);
     }
 
