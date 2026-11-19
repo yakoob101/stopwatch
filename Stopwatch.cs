@@ -232,7 +232,7 @@ internal static class Program
         _lapScale = Clamp(Math.Min(_mainScale * 2 / 5, (innerW * 40 / 100 - 8) / 53), 1, 4);
 
         _rcClock = new RECT { left = pad, top = pad, right = w - pad, bottom = pad + 7 * _clockScale };
-        int top = _rcClock.bottom + pad / 2;
+        int top = _rcClock.bottom + pad;
         _rcMain = new RECT { left = pad, top = top, right = w - pad, bottom = top + 7 * _mainScale };
 
         int btnH = Clamp(h * 10 / 100, 30, 56);
