@@ -42,6 +42,7 @@ internal static class Program
         _dpi = GetDeviceCaps(screen, 90); // LOGPIXELSY
         ReleaseDC(IntPtr.Zero, screen);
         QueryPerformanceFrequency(out _freq);
+        LoadState();
 
         IntPtr inst = GetModuleHandle(null);
         WNDCLASSEX wc = new WNDCLASSEX();
@@ -115,6 +116,7 @@ internal static class Program
                 return IntPtr.Zero;
 
             case WM_DESTROY:
+                SaveState();
                 ReleaseBuffer();
                 PostQuitMessage(0);
                 return IntPtr.Zero;
@@ -214,6 +216,38 @@ internal static class Program
         SetWindowPos(_hwnd, _topmost ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         InvalidateRect(_hwnd, IntPtr.Zero, false);
+    }
+
+    // ---- state persistence -------------------------------------------------
+    // The last reading survives a close; it reopens paused at that time.
+    static void SaveState()
+    {
+        try
+        {
+            using (Microsoft.Win32.RegistryKey k =
+                Microsoft.Win32.Registry.CurrentUser.CreateSubKey("Software\\PixelStopwatch"))
+            {
+                k.SetValue("ElapsedMs", ElapsedMs());
+            }
+        }
+        catch { }
+    }
+
+    static void LoadState()
+    {
+        try
+        {
+            using (Microsoft.Win32.RegistryKey k =
+                Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Software\\PixelStopwatch"))
+            {
+                if (k == null) return;
+                object v = k.GetValue("ElapsedMs");
+                if (v == null) return;
+                long ms = Convert.ToInt64(v);
+                if (ms > 0) _accum = ms * _freq / 1000;
+            }
+        }
+        catch { }
     }
 
     // ---- layout -----------------------------------------------------------
