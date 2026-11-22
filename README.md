@@ -20,9 +20,15 @@ Double-click `build.cmd` (uses the C# compiler built into Windows).
 | Reset | RESET | R |
 | Lap | LAP | L |
 | Always on top | PIN | T |
+| Set the reading (paused) | click the time | E |
 
 Laps show split and total, newest first. The window scales from 360x280 to full screen; the pixel
 font only uses whole-pixel scales, so it stays sharp at any size.
+
+To set a reading, pause first, then click the big time or press E. Type seconds, optionally with up
+to three decimals (`45`, `45.5`, `0.045`): Backspace deletes, Delete clears, Enter applies, Esc
+cancels. Setting a reading clears the laps, since the old splits no longer line up. Start resumes
+from the value you typed.
 
 Closing the app saves the current reading; it reopens paused at that time. Reset clears it.
 The value lives under `HKCU\Software\PixelStopwatch`.

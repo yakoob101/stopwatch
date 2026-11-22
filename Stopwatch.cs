@@ -8,6 +8,8 @@ internal static class Program
     static long _freq, _start, _accum;
     static bool _running, _topmost;
     static int _lastSecond = -1;
+    static bool _editing, _caretOn;
+    static string _editBuf = "";
     static readonly long[] _laps = new long[512];
     static int _lapCount;
     static int _dpi = 96;
@@ -142,10 +144,12 @@ internal static class Program
 
     static void Key(int k)
     {
+        if (_editing) { EditKey(k); return; }
         if (k == 0x20) ToggleRun();
         else if (k == 'R') Reset();
         else if (k == 'L') Lap();
         else if (k == 'T') ToggleTop();
+        else if (k == 'E') BeginEdit();
     }
 
     static void Click(int x, int y)
@@ -159,6 +163,75 @@ internal static class Program
                 else ToggleTop();
                 return;
             }
+        if (x >= _rcMain.left && x < _rcMain.right && y >= _rcMain.top && y < _rcMain.bottom)
+            BeginEdit();
+    }
+
+    // ---- editing the reading ----------------------------------------------
+    static void BeginEdit()
+    {
+        if (_running || _editing) return; // only a paused watch can be set
+        _editing = true;
+        _editBuf = "";
+        _caretOn = true;
+        InvalidateRect(_hwnd, IntPtr.Zero, false);
+    }
+
+    static void CancelEdit()
+    {
+        _editing = false;
+        InvalidateRect(_hwnd, IntPtr.Zero, false);
+    }
+
+    static void ApplyEdit()
+    {
+        _editing = false;
+        _accum = EditMs() * _freq / 1000;
+        _lapCount = 0; // the timeline changed, old laps no longer line up
+        InvalidateRect(_hwnd, IntPtr.Zero, false);
+    }
+
+    // typed as seconds, optionally with up to 3 decimals: 45, 45.5, 0.045
+    static long EditMs()
+    {
+        int dot = _editBuf.IndexOf('.');
+        string whole = dot < 0 ? _editBuf : _editBuf.Substring(0, dot);
+        string frac = dot < 0 ? "" : _editBuf.Substring(dot + 1);
+        if (frac.Length > 3) frac = frac.Substring(0, 3);
+        frac = frac.PadRight(3, '0');
+        long w, f;
+        long.TryParse(whole, out w);
+        long.TryParse(frac, out f);
+        long ms = w * 1000 + f;
+        return ms > 5999999 ? 5999999 : ms; // cap at 99:59.999 so the caret fits
+    }
+
+    static void EditKey(int k)
+    {
+        _caretOn = true;
+        if (k >= '0' && k <= '9') AppendDigit((char)k);
+        else if (k >= 0x60 && k <= 0x69) AppendDigit((char)('0' + k - 0x60));
+        else if (k == 0xBE || k == 0xBC || k == 0x6E) AppendDot();
+        else if (k == 0x08) { if (_editBuf.Length > 0) _editBuf = _editBuf.Substring(0, _editBuf.Length - 1); }
+        else if (k == 0x2E) _editBuf = "";
+        else if (k == 0x0D) { ApplyEdit(); return; }
+        else if (k == 0x1B) { CancelEdit(); return; }
+        InvalidateRectRect(_hwnd, ref _rcMain, false);
+    }
+
+    static void AppendDigit(char c)
+    {
+        int dot = _editBuf.IndexOf('.');
+        if (dot < 0) { if (_editBuf.Length >= 5) return; }
+        else if (_editBuf.Length - dot - 1 >= 3) return;
+        _editBuf += c;
+    }
+
+    static void AppendDot()
+    {
+        if (_editBuf.IndexOf('.') >= 0) return;
+        if (_editBuf.Length == 0) _editBuf = "0";
+        _editBuf += ".";
     }
 
     static void Tick()
@@ -171,6 +244,11 @@ internal static class Program
             _lastSecond = sec;
             InvalidateRect(_hwnd, IntPtr.Zero, false); // clock changed: full repaint
         }
+        else if (_editing)
+        {
+            _caretOn = !_caretOn;
+            InvalidateRectRect(_hwnd, ref _rcMain, false);
+        }
         else if (_running)
         {
             InvalidateRectRect(_hwnd, ref _rcMain, false); // digits only
@@ -179,6 +257,7 @@ internal static class Program
 
     static void ToggleRun()
     {
+        if (_editing) ApplyEdit();
         if (_running)
         {
             _accum += Now() - _start;
@@ -196,6 +275,7 @@ internal static class Program
 
     static void Reset()
     {
+        _editing = false;
         _running = false;
         _accum = 0;
         _lapCount = 0;
@@ -205,6 +285,7 @@ internal static class Program
 
     static void Lap()
     {
+        if (_editing) return;
         // shortcut: 512 lap cap keeps memory fixed; raise or ring-buffer if ever needed
         if (_lapCount < _laps.Length) _laps[_lapCount++] = ElapsedMs();
         InvalidateRect(_hwnd, IntPtr.Zero, false);
@@ -363,6 +444,24 @@ internal static class Program
 
     static void DrawTime(IntPtr dc)
     {
+        if (_editing)
+        {
+            string s = Fmt(EditMs());
+            int scale = _mainScale;
+            int tw = TextWidth(s, scale);
+            int x = _rcMain.left + (_rcMain.right - _rcMain.left - tw) / 2;
+            int y = _rcMain.top + (_rcMain.bottom - _rcMain.top - 7 * scale) / 2;
+            PixelText(dc, s, x, y, scale, Accent);
+            if (_caretOn)
+                Fill(dc, new RECT
+                {
+                    left = x + tw + 2 * scale,
+                    top = y,
+                    right = x + tw + 4 * scale,
+                    bottom = y + 7 * scale
+                }, Accent);
+            return;
+        }
         PixelCenter(dc, Fmt(ElapsedMs()), _rcMain, _mainScale, _running ? Ink : Dim);
     }
 
