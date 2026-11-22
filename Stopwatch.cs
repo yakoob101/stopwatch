@@ -144,8 +144,8 @@ internal static class Program
 
     static void Key(int k)
     {
-        if (_editing) { EditKey(k); return; }
-        if (k == 0x20) ToggleRun();
+        if (k == 0x20 || k == 0x0D) ToggleRun(); // space or enter; applies an edit first
+        else if (_editing) EditKey(k);
         else if (k == 'R') Reset();
         else if (k == 'L') Lap();
         else if (k == 'T') ToggleTop();
@@ -214,7 +214,6 @@ internal static class Program
         else if (k == 0xBE || k == 0xBC || k == 0x6E) AppendDot();
         else if (k == 0x08) { if (_editBuf.Length > 0) _editBuf = _editBuf.Substring(0, _editBuf.Length - 1); }
         else if (k == 0x2E) _editBuf = "";
-        else if (k == 0x0D) { ApplyEdit(); return; }
         else if (k == 0x1B) { CancelEdit(); return; }
         InvalidateRectRect(_hwnd, ref _rcMain, false);
     }
