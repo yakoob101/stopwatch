@@ -23,7 +23,7 @@ internal static class Program
     // palette, 0xRRGGBB
     const uint Bg = 0x0E1014, Surface = 0x171A20, Border = 0x2A2F38,
         Ink = 0xF2F3F5, Dim = 0x7C8494, Split = 0xB8C0CC,
-        Accent = 0x6FE0A5, OnAccent = 0x07130C;
+        Accent = 0xB18CFF, OnAccent = 0x140A26;
 
     // ---- win32 constants --------------------------------------------------
     const uint WS_OVERLAPPEDWINDOW = 0x00CF0000;
