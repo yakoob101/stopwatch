@@ -371,8 +371,8 @@ internal static class Program
         _rcLaps = new RECT { left = pad, top = _rcMain.bottom + pad, right = w - pad, bottom = regionBottom };
         _lapRowH = 7 * _lapScale + Clamp(_lapScale * 3, 6, 14);
 
-        // name sits just above the controls, taking its height from the lap area
-        _nameScale = Clamp(_lapScale - 1, 1, 2);
+        // name sits just above the controls at a fixed small size
+        _nameScale = 2;
         int nameBottom = btnTop - pad / 2;
         _rcName = new RECT
         {
