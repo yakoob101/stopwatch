@@ -17,8 +17,8 @@ internal static class Program
     static int _bufW, _bufH;
 
     static readonly RECT[] _btn = new RECT[4];
-    static RECT _rcClock, _rcMain, _rcLaps;
-    static int _mainScale, _clockScale, _lapScale, _btnScale, _lapRowH;
+    static RECT _rcClock, _rcMain, _rcName, _rcLaps;
+    static int _mainScale, _clockScale, _lapScale, _nameScale, _btnScale, _lapRowH;
 
     // palette, 0xRRGGBB
     const uint Bg = 0x0E1014, Surface = 0x171A20, Border = 0x2A2F38,
@@ -370,6 +370,18 @@ internal static class Program
 
         _rcLaps = new RECT { left = pad, top = _rcMain.bottom + pad, right = w - pad, bottom = regionBottom };
         _lapRowH = 7 * _lapScale + Clamp(_lapScale * 3, 6, 14);
+
+        // name sits just above the controls, taking its height from the lap area
+        _nameScale = _lapScale;
+        int nameBottom = btnTop - pad / 2;
+        _rcName = new RECT
+        {
+            left = pad,
+            top = nameBottom - 7 * _nameScale,
+            right = w - pad,
+            bottom = nameBottom
+        };
+        _rcLaps.bottom = _rcName.top - pad / 2;
     }
 
     // ---- painting ---------------------------------------------------------
@@ -431,6 +443,12 @@ internal static class Program
         DrawTime(dc);
         DrawButtons(dc);
         DrawLaps(dc);
+        DrawName(dc);
+    }
+
+    static void DrawName(IntPtr dc)
+    {
+        PixelCenter(dc, "YAKOOB AHMED", _rcName, _nameScale, Dim);
     }
 
     static void DrawClock(IntPtr dc)
@@ -568,6 +586,7 @@ internal static class Program
 
     static int Glyph(char c)
     {
+        if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A'); // font is caps only
         if (c >= 'A' && c <= 'Z') return c - 'A';
         if (c >= '0' && c <= '9') return 26 + c - '0';
         if (c == ':') return 36;
