@@ -448,7 +448,7 @@ internal static class Program
 
     static void DrawName(IntPtr dc)
     {
-        PixelCenter(dc, "YAKOOB AHMED", _rcName, _nameScale, Dim);
+        PixelCenter(dc, "YAKOOB AHMED", _rcName, _nameScale, Accent);
     }
 
     static void DrawClock(IntPtr dc)
