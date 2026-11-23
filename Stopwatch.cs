@@ -372,7 +372,7 @@ internal static class Program
         _lapRowH = 7 * _lapScale + Clamp(_lapScale * 3, 6, 14);
 
         // name sits just above the controls, taking its height from the lap area
-        _nameScale = _lapScale;
+        _nameScale = Clamp(_lapScale - 1, 1, 2);
         int nameBottom = btnTop - pad / 2;
         _rcName = new RECT
         {
