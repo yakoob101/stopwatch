@@ -25,8 +25,8 @@ internal static class Program
         Ink = 0xF2F3F5, Dim = 0x7C8494, Split = 0xB8C0CC, OnAccent = 0x140A26;
 
     // accent themes, cycled by the swatch above the controls
-    static readonly uint[] _accentSet = { 0xB18CFF, 0x6FE0A5, 0x7FB8FF, 0xFF8CC6, 0xFFC46B };
-    static readonly uint[] _accentDimSet = { 0x7A63B8, 0x4E9E74, 0x557FAF, 0xAC5F86, 0xAB8348 };
+    static readonly uint[] _accentSet = { 0xB18CFF, 0x4ADE80, 0x7FB8FF, 0xFF8CC6, 0xFFC46B };
+    static readonly uint[] _accentDimSet = { 0x7A63B8, 0x3B9E5F, 0x557FAF, 0xAC5F86, 0xAB8348 };
     static int _theme;
     static uint _accent = _accentSet[0], _accentDim = _accentDimSet[0];
 
