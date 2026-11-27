@@ -17,13 +17,18 @@ internal static class Program
     static int _bufW, _bufH;
 
     static readonly RECT[] _btn = new RECT[4];
-    static RECT _rcClock, _rcMain, _rcName, _rcLaps;
+    static RECT _rcClock, _rcMain, _rcName, _rcLaps, _rcSwatch;
     static int _mainScale, _clockScale, _lapScale, _nameScale, _btnScale, _lapRowH;
 
     // palette, 0xRRGGBB
     const uint Bg = 0x0E1014, Surface = 0x171A20, Border = 0x2A2F38,
-        Ink = 0xF2F3F5, Dim = 0x7C8494, Split = 0xB8C0CC,
-        Accent = 0xB18CFF, OnAccent = 0x140A26, AccentDim = 0x7A63B8;
+        Ink = 0xF2F3F5, Dim = 0x7C8494, Split = 0xB8C0CC, OnAccent = 0x140A26;
+
+    // accent themes, cycled by the swatch above the controls
+    static readonly uint[] _accentSet = { 0xB18CFF, 0x6FE0A5, 0x7FB8FF, 0xFF8CC6, 0xFFC46B };
+    static readonly uint[] _accentDimSet = { 0x7A63B8, 0x4E9E74, 0x557FAF, 0xAC5F86, 0xAB8348 };
+    static int _theme;
+    static uint _accent = _accentSet[0], _accentDim = _accentDimSet[0];
 
     // ---- win32 constants --------------------------------------------------
     const uint WS_OVERLAPPEDWINDOW = 0x00CF0000;
@@ -154,6 +159,11 @@ internal static class Program
 
     static void Click(int x, int y)
     {
+        if (x >= _rcSwatch.left && x < _rcSwatch.right && y >= _rcSwatch.top && y < _rcSwatch.bottom)
+        {
+            CycleTheme();
+            return;
+        }
         for (int i = 0; i < 4; i++)
             if (x >= _btn[i].left && x < _btn[i].right && y >= _btn[i].top && y < _btn[i].bottom)
             {
@@ -298,6 +308,14 @@ internal static class Program
         InvalidateRect(_hwnd, IntPtr.Zero, false);
     }
 
+    static void CycleTheme()
+    {
+        _theme = (_theme + 1) % _accentSet.Length;
+        _accent = _accentSet[_theme];
+        _accentDim = _accentDimSet[_theme];
+        InvalidateRect(_hwnd, IntPtr.Zero, false);
+    }
+
     // ---- state persistence -------------------------------------------------
     // The last reading survives a close; it reopens paused at that time.
     static void SaveState()
@@ -346,6 +364,10 @@ internal static class Program
         _lapScale = Clamp(Math.Min(_mainScale * 2 / 5, (innerW * 40 / 100 - 8) / 53), 1, 4);
 
         _rcClock = new RECT { left = pad, top = pad, right = w - pad, bottom = pad + 7 * _clockScale };
+
+        // small colour swatch in the top-right corner of the clock row
+        int sw = Clamp(8 * _clockScale, 14, 28);
+        _rcSwatch = new RECT { left = w - pad - sw, top = pad, right = w - pad, bottom = pad + sw };
 
         int btnH = Clamp(h * 10 / 100, 30, 56);
         int btnTop = h - pad - btnH;
@@ -440,15 +462,21 @@ internal static class Program
     static void DrawUi(IntPtr dc)
     {
         DrawClock(dc);
+        DrawSwatch(dc);
         DrawTime(dc);
         DrawButtons(dc);
         DrawLaps(dc);
         DrawName(dc);
     }
 
+    static void DrawSwatch(IntPtr dc)
+    {
+        Box(dc, _rcSwatch, _accent, Border);
+    }
+
     static void DrawName(IntPtr dc)
     {
-        PixelCenter(dc, "DESIGNED BY YAKOOB", _rcName, _nameScale, AccentDim);
+        PixelCenter(dc, "DESIGNED BY YAKOOB", _rcName, _nameScale, _accentDim);
     }
 
     static void DrawClock(IntPtr dc)
@@ -468,7 +496,7 @@ internal static class Program
             int tw = TextWidth(s, scale);
             int x = _rcMain.left + (_rcMain.right - _rcMain.left - tw) / 2;
             int y = _rcMain.top + (_rcMain.bottom - _rcMain.top - 7 * scale) / 2;
-            PixelText(dc, s, x, y, scale, Accent);
+            PixelText(dc, s, x, y, scale, _accent);
             if (_caretOn)
                 Fill(dc, new RECT
                 {
@@ -476,10 +504,10 @@ internal static class Program
                     top = y,
                     right = x + tw + 4 * scale,
                     bottom = y + 7 * scale
-                }, Accent);
+                }, _accent);
             return;
         }
-        PixelCenter(dc, Fmt(ElapsedMs()), _rcMain, _mainScale, _running ? Accent : AccentDim);
+        PixelCenter(dc, Fmt(ElapsedMs()), _rcMain, _mainScale, _running ? _accent : _accentDim);
     }
 
     static void DrawButtons(IntPtr dc)
@@ -487,7 +515,7 @@ internal static class Program
         for (int i = 0; i < 4; i++)
         {
             bool filled = i == 0 || (i == 3 && _topmost);
-            if (filled) Fill(dc, _btn[i], Accent);
+            if (filled) Fill(dc, _btn[i], _accent);
             else Box(dc, _btn[i], Surface, Border);
             PixelCenter(dc, Label(i), _btn[i], _btnScale, filled ? OnAccent : Ink);
         }

@@ -20,6 +20,7 @@ Double-click `build.cmd` (uses the C# compiler built into Windows).
 | Reset | RESET | R |
 | Lap | LAP | L |
 | Always on top | PIN | T |
+| Cycle colours | swatch (top right) | — |
 | Set the reading (paused) | click the time | E |
 
 Laps show split and total, newest first. The window scales from 360x280 to full screen; the pixel
